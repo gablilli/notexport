@@ -78,7 +78,7 @@ notes will be exported to `~/Downloads/AppleNotesExport` by default.
 | option | short | description |
 |--------|-------|-------------|
 | `--root-dir` | `-r` | output directory (default: `~/Downloads/AppleNotesExport`) |
-| `--folders` | `-F` | comma-separated folder names to export (includes subfolders automatically) |
+| `--folders` | `-F` | comma-separated folder names to export (matches all folders with given names) |
 | `--convert-pdf` | `-p` | convert to pdf |
 | `--convert-markdown` | `-m` | convert to markdown |
 | `--convert-word` | `-w` | convert to word (docx) |
@@ -92,7 +92,8 @@ notes will be exported to `~/Downloads/AppleNotesExport` by default.
 **Note on `--folders` filter:**
 - Use exact folder names as they appear in Notes.app
 - Separate multiple folders with commas (no spaces after commas)
-- Subfolders are automatically included when a parent folder is specified
+- The filter matches all folders with the given name, including nested folders with the same name
+- Example: filtering for "Esercizi" will match all folders named "Esercizi" regardless of their parent
 - The filter matches both original folder names and sanitized names (with special characters replaced)
 
 ## 📁 output structure
