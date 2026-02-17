@@ -50,6 +50,7 @@ on run argv
         set rawFolders to text items of envFoldersFilter
         set AppleScript's text item delimiters to ""
         -- Trim whitespace from each folder name
+        -- Note: 'as text' conversion is required because repeat with in-loop returns references, not values
         repeat with aFolder in rawFolders
             set trimmedFolder to my trimText(aFolder as text)
             if trimmedFolder is not "" then

@@ -91,7 +91,7 @@ notes will be exported to `~/Downloads/AppleNotesExport` by default.
 
 **Note on `--folders` filter:**
 - Use exact folder names as they appear in Notes.app
-- Separate multiple folders with commas (no spaces after commas)
+- Separate multiple folders with commas (spaces after commas are automatically trimmed)
 - The filter matches all folders with the given name, including nested folders with the same name
 - Example: filtering for "Esercizi" will match all folders named "Esercizi" regardless of their parent
 - The filter matches both original folder names and sanitized names (with special characters replaced)
