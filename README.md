@@ -54,10 +54,10 @@ notes will be exported to `~/Downloads/AppleNotesExport` by default.
 # export all formats (html, markdown, pdf, word)
 ./exportnotes.zsh --all
 
-# export only specific folders (comma-separated, no spaces)
+# export only specific folders (comma-separated)
 ./exportnotes.zsh --folders "Work,Personal,Projects"
 
-# export folders with spaces in names (use commas without extra spaces)
+# export folders with spaces in names (spaces after commas are optional)
 ./exportnotes.zsh --folders "My Work Notes,Personal Diary,Class Notes"
 
 # export to pdf with cleanup (removes source files after)
