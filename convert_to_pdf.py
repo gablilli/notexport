@@ -43,11 +43,10 @@ def set_file_dates(file_path, creation_date, modification_date):
         mod_timestamp = modification_date.strftime("%Y%m%d%H%M.%S")
         subprocess.run(['touch', '-t', mod_timestamp, file_path], check=True)
 
-        # Set creation date (birth time) using touch -t with -d flag on macOS
-        # Note: This requires macOS 10.13+ or we can use SetFile from Xcode tools
+        # Set creation date (birth time) using SetFile from Xcode tools
         create_timestamp = creation_date.strftime("%Y%m%d%H%M.%S")
 
-        # Try using SetFile first (more reliable for creation date)
+        # Try using SetFile first (more reliable for creation date on macOS)
         try:
             # SetFile format: "MM/DD/YYYY HH:MM:SS"
             setfile_date = creation_date.strftime("%m/%d/%Y %H:%M:%S")
@@ -237,6 +236,7 @@ def convert_html_to_pdf():
             output_file = tracker.get_output_path('pdf', note['notebook'], note['filename'], '.pdf')
             
             # Always use CSS-enhanced HTML (fixes text cutoff in all modes)
+            # Note: note['filename'] is the sanitized note title used for the filename
             source_file = add_pdf_css_to_html(note['source_file'], continuous=continuous_pdf, title=note['filename'])
             temp_files_to_cleanup.append(source_file.parent)  # Track temp directory for cleanup
             

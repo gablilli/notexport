@@ -107,11 +107,16 @@ def test_add_pdf_css_normal_mode():
         with open(result_file, 'r', encoding='utf-8') as f:
             content = f.read()
         
-        # Base CSS should still be present
+        # Base CSS should be present
         assert "word-wrap: break-word" in content
-        # But continuous mode CSS should not be present
-        # Note: We check that page-break prevention is only in continuous mode
-        # In normal mode, base CSS is present but not the extra page-break rules
+        
+        # Continuous mode CSS (page-break prevention) should NOT be present in normal mode
+        # We verify this by checking that continuous-specific rules are absent
+        lines = content.split('\n')
+        # Count occurrences of page-break-inside to ensure continuous CSS is not added
+        page_break_count = sum(1 for line in lines if 'page-break-inside: avoid' in line)
+        # In normal mode, page-break-inside should not appear (0 occurrences)
+        assert page_break_count == 0, f"Found {page_break_count} page-break-inside rules, expected 0 in normal mode"
 
 
 def test_add_pdf_css_preserves_attachments():
