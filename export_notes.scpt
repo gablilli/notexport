@@ -94,6 +94,7 @@ on run argv
                 set folderName to my makeValidFilename(rawFolderName)
                 
                 -- Check if this folder should be processed (skip if filter is set and folder not in list)
+                set shouldProcessFolder to true
                 if (count of foldersToExport) > 0 then
                     set shouldProcessFolder to false
                     repeat with allowedFolder in foldersToExport
@@ -104,14 +105,13 @@ on run argv
                     end repeat
                     if not shouldProcessFolder then
                         log "Skipping folder (not in filter): " & rawFolderName
-                        -- Skip to next folder (continue not available in AppleScript, so we use a workaround)
                     end if
                 end if
                 
-                -- Only process if folder passes filter or no filter is set
-                if (count of foldersToExport) = 0 or shouldProcessFolder then
-                set theNotes to notes of aFolder
+                -- Only process if folder passes filter
+                if shouldProcessFolder then
                 set folderNoteCount to 0
+                set theNotes to notes of aFolder
                 set outputNoteCount to 0
 
                 -- Determine the data file name based on subdirectory usage

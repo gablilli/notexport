@@ -62,19 +62,26 @@ def create_continuous_html(source_file: Path) -> Path:
         html_content = f'<html><head>{continuous_css}</head><body>{html_content}</body></html>'
     
     # Create a temporary file with the modified HTML
-    temp_dir = tempfile.mkdtemp()
-    temp_file = Path(temp_dir) / source_file.name
-    
-    # Copy attachments folder if it exists
-    source_attachments = source_file.parent / 'attachments'
-    if source_attachments.exists():
-        temp_attachments = Path(temp_dir) / 'attachments'
-        shutil.copytree(source_attachments, temp_attachments)
-    
-    with open(temp_file, 'w', encoding='utf-8') as f:
-        f.write(html_content)
-    
-    return temp_file
+    temp_dir = None
+    try:
+        temp_dir = tempfile.mkdtemp()
+        temp_file = Path(temp_dir) / source_file.name
+        
+        # Copy attachments folder if it exists
+        source_attachments = source_file.parent / 'attachments'
+        if source_attachments.exists():
+            temp_attachments = Path(temp_dir) / 'attachments'
+            shutil.copytree(source_attachments, temp_attachments)
+        
+        with open(temp_file, 'w', encoding='utf-8') as f:
+            f.write(html_content)
+        
+        return temp_file
+    except Exception:
+        # Clean up temp directory on error to prevent leaks
+        if temp_dir and os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir, ignore_errors=True)
+        raise
 
 def convert_html_to_pdf():
     """Convert HTML files to PDF using JSON tracking"""
@@ -99,7 +106,7 @@ def convert_html_to_pdf():
     continuous_pdf = os.getenv('NOTES_EXPORT_CONTINUOUS_PDF', 'false').lower() == 'true'
     
     print(f"Suppress header: {suppress_header}")
-    print(f"Continuous PDF (for handwritten notes): {continuous_pdf}")
+    print(f"Continuous PDF (no page breaks): {continuous_pdf}")
     
     temp_files_to_cleanup = []
     
