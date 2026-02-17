@@ -211,7 +211,7 @@ while [[ $# -gt 0 ]]; do
             echo "  -D, --set-file-dates BOOL          Set filesystem dates to match Notes.app (default: true)"
             echo "  -F, --folders FOLDERS              Comma-separated folder names (e.g., 'Work,Personal')"
             echo "                                     Matches all folders with the given names (including nested folders)."
-            echo "                                     No spaces after commas."
+            echo "                                     Avoid spaces after commas (use 'Work,Personal' not 'Work, Personal')."
             echo "  -C, --cleanup                      Cleanup source directories after PDF conversion"
             echo "  -P, --continuous-pdf               Export PDFs as continuous page (for handwritten notes)"
             echo "  -c, --conda-env NAME               Conda environment name"

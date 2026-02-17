@@ -919,7 +919,12 @@ on trimText(theText)
     repeat while (count of theText) > 0
         set firstChar to character 1 of theText
         if firstChar is in whitespaceChars then
-            set theText to text 2 thru -1 of theText
+            if (count of theText) > 1 then
+                set theText to text 2 thru -1 of theText
+            else
+                set theText to ""
+                exit repeat
+            end if
         else
             exit repeat
         end if
@@ -929,7 +934,12 @@ on trimText(theText)
     repeat while (count of theText) > 0
         set lastChar to character -1 of theText
         if lastChar is in whitespaceChars then
-            set theText to text 1 thru -2 of theText
+            if (count of theText) > 1 then
+                set theText to text 1 thru -2 of theText
+            else
+                set theText to ""
+                exit repeat
+            end if
         else
             exit repeat
         end if
