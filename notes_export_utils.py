@@ -55,12 +55,12 @@ class NotesExportTracker:
         return fallback
         
     def get_all_data_files(self) -> List[Path]:
-        """Get all JSON data files in the data directory"""
+        """Get all JSON data files in the data directory (including subdirectories)"""
         data_path = Path(self.data_directory)
         if not data_path.exists():
             print(f"Warning: Data directory does not exist: {self.data_directory}")
             return []
-        return list(data_path.glob("*.json"))
+        return list(data_path.glob("**/*.json"))
     
     def load_notebook_data(self, json_file_path: str) -> Dict[str, Any]:
         """Load notebook data from JSON file"""
@@ -89,7 +89,11 @@ class NotesExportTracker:
         
         for json_file in self.get_all_data_files():
             notebook_data = self.load_notebook_data(json_file)
-            folder_name = json_file.stem
+            # Derive folder_name relative to the data directory so that nested JSON files
+            # (e.g. <data_dir>/iCloud-Latino/Esercizi.json) produce a path like
+            # "iCloud-Latino/Esercizi" instead of just "Esercizi".
+            data_path = Path(self.data_directory)
+            folder_name = str(json_file.relative_to(data_path).with_suffix(''))
             
             for note_id, note_info in notebook_data.items():
                 # Skip deleted notes

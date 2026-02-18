@@ -141,13 +141,48 @@ on run argv
 
                 -- Determine the data file name based on subdirectory usage
                 if envUseSubdirs is "true" then
-                    set subdirName to my generateFilename(envSubdirFormat, "", "", accountName, folderName, accountID, shortAccountID)
+                    -- Build the full folder path by walking up the container hierarchy
+                    -- so that nested folders like Latino/Esercizi are placed under
+                    -- the top-level folder directory rather than at the same level.
+                    set ancestorFolders to {}
+                    set currentFolderForPath to aFolder
+                    repeat
+                        set end of ancestorFolders to my makeValidFilename(name of currentFolderForPath)
+                        try
+                            set parentContainer to container of currentFolderForPath
+                            if class of parentContainer is account then exit repeat
+                            set currentFolderForPath to parentContainer
+                        on error
+                            exit repeat
+                        end try
+                    end repeat
+                    -- ancestorFolders is ordered from deepest (current) folder to shallowest (top-level)
+                    -- Apply envSubdirFormat to the top-level folder only
+                    set topLevelFolder to item (count of ancestorFolders) of ancestorFolders
+                    set subdirName to my generateFilename(envSubdirFormat, "", "", accountName, topLevelFolder, accountID, shortAccountID)
+                    -- Append any intermediate/leaf subfolders (second-to-last down to first)
+                    if (count of ancestorFolders) > 1 then
+                        repeat with i from (count of ancestorFolders) - 1 to 1 by -1
+                            set subdirName to subdirName & "/" & item i of ancestorFolders
+                        end repeat
+                    end if
                     set folderHTMLPath to htmlDirectory & subdirName & "/"
                     set folderTextPath to textDirectory & subdirName & "/"
                     set folderRawPath to rawDirectory & subdirName & "/"
                     my createDirectory(folderHTMLPath)
                     my createDirectory(folderTextPath)
                     my createDirectory(folderRawPath)
+                    -- Create parent directory for the data file when the path has subdirectory components
+                    if subdirName contains "/" then
+                        set AppleScript's text item delimiters to "/"
+                        set subdirParts to text items of subdirName
+                        set AppleScript's text item delimiters to ""
+                        set subdirParentParts to items 1 through ((count of subdirParts) - 1) of subdirParts
+                        set AppleScript's text item delimiters to "/"
+                        set dataFileParentPath to dataDirectory & (subdirParentParts as string) & "/"
+                        set AppleScript's text item delimiters to ""
+                        my createDirectory(dataFileParentPath)
+                    end if
                     set notebookDataFile to dataDirectory & subdirName & ".json"
                     log "Notebook: " & (subdirName)
                 else
