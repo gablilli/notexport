@@ -1,4 +1,3 @@
-import subprocess
 import os
 import re
 import sys
@@ -7,6 +6,12 @@ import shutil
 from pathlib import Path
 from notes_export_utils import get_tracker
 from datetime import datetime
+
+try:
+    import weasyprint as _weasyprint
+    _WEASYPRINT_AVAILABLE = True
+except ImportError:
+    _WEASYPRINT_AVAILABLE = False
 
 # Italian month name to number mapping
 _ITALIAN_MONTHS = {
@@ -254,11 +259,13 @@ def convert_html_to_pdf():
     print(f"Processing {len(notes_to_process)} notes for PDF conversion...")
     
     # Check settings
-    suppress_header = os.getenv('NOTES_EXPORT_SUPPRESS_CHROME_HEADER_PDF', 'false').lower() == 'true'
     continuous_pdf = os.getenv('NOTES_EXPORT_CONTINUOUS_PDF', 'false').lower() == 'true'
     
-    print(f"Suppress header: {suppress_header}")
     print(f"Continuous PDF (no page breaks): {continuous_pdf}")
+    
+    if not _WEASYPRINT_AVAILABLE:
+        print("Error: weasyprint is not installed. Run: pip install 'weasyprint>=68.0'", file=sys.stderr)
+        sys.exit(1)
     
     temp_files_to_cleanup = []
     
@@ -274,46 +281,27 @@ def convert_html_to_pdf():
             source_file = add_pdf_css_to_html(note['source_file'], continuous=continuous_pdf, title=note['filename'])
             temp_files_to_cleanup.append(source_file.parent)  # Track temp directory for cleanup
             
-            # Prepare headless Chrome command
-            cmd = [
-                "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", 
-                "--headless"
-            ]
+            # Convert HTML to PDF using weasyprint (native, no external browser needed)
+            _weasyprint.HTML(filename=str(source_file)).write_pdf(str(output_file))
             
-            if suppress_header:
-                cmd.append("--no-pdf-header-footer")
+            print(f"Created: {output_file}")
             
-            cmd.extend([
-                "--print-to-pdf=" + str(output_file), 
-                str(source_file)
-            ])
+            # Set file dates to match the original note dates
+            created_str = note['note_info'].get('created')
+            modified_str = note['note_info'].get('modified')
             
-            # Run headless Chrome command
-            result = subprocess.run(cmd, capture_output=True, text=True)
-            
-            if result.returncode == 0:
-                print(f"Created: {output_file}")
+            if created_str and modified_str:
+                created_date = parse_apple_date(created_str)
+                modified_date = parse_apple_date(modified_str)
                 
-                # Set file dates to match the original note dates
-                created_str = note['note_info'].get('created')
-                modified_str = note['note_info'].get('modified')
-                
-                if created_str and modified_str:
-                    created_date = parse_apple_date(created_str)
-                    modified_date = parse_apple_date(modified_str)
-                    
-                    if created_date and modified_date:
-                        if set_file_dates(str(output_file), created_date, modified_date):
-                            print(f"Set dates: created={created_str}, modified={modified_str}")
-                    else:
-                        print(f"Warning: Could not parse dates for {note['filename']}")
-                
-                # Mark as exported in JSON
-                tracker.mark_note_exported(note['json_file'], note['note_id'], 'pdf')
-            else:
-                print(f"Error converting {note['filename']}: Chrome returned code {result.returncode}")
-                if result.stderr:
-                    print(f"Chrome error: {result.stderr}")
+                if created_date and modified_date:
+                    if set_file_dates(str(output_file), created_date, modified_date):
+                        print(f"Set dates: created={created_str}, modified={modified_str}")
+                else:
+                    print(f"Warning: Could not parse dates for {note['filename']}")
+            
+            # Mark as exported in JSON
+            tracker.mark_note_exported(note['json_file'], note['note_id'], 'pdf')
             
         except Exception as e:
             print(f"Error converting {note['filename']}: {e}")

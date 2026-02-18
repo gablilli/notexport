@@ -102,15 +102,31 @@ on run argv
                 set folderName to my makeValidFilename(rawFolderName)
                 
                 -- Check if this folder should be processed (skip if filter is set and folder not in list)
+                -- Also matches subfolders of allowed folders by walking up the container chain.
                 set shouldProcessFolder to true
                 if (count of foldersToExport) > 0 then
                     set shouldProcessFolder to false
-                    repeat with allowedFolder in foldersToExport
-                        set allowedFolderText to allowedFolder as text
-                        if rawFolderName is equal to allowedFolderText or folderName is equal to allowedFolderText then
-                            set shouldProcessFolder to true
+                    -- Walk up the container hierarchy to check if this folder or any ancestor matches
+                    set currentContainer to aFolder
+                    repeat
+                        set currentRawName to name of currentContainer
+                        set currentValidName to my makeValidFilename(currentRawName)
+                        repeat with allowedFolder in foldersToExport
+                            set allowedFolderText to allowedFolder as text
+                            if currentRawName is equal to allowedFolderText or currentValidName is equal to allowedFolderText then
+                                set shouldProcessFolder to true
+                                exit repeat
+                            end if
+                        end repeat
+                        if shouldProcessFolder then exit repeat
+                        -- Move up to the parent container; stop when we reach an account
+                        try
+                            set parentContainer to container of currentContainer
+                            if class of parentContainer is account then exit repeat
+                            set currentContainer to parentContainer
+                        on error
                             exit repeat
-                        end if
+                        end try
                     end repeat
                     if not shouldProcessFolder then
                         log "Skipping folder (not in filter): " & rawFolderName
