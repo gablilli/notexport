@@ -290,25 +290,41 @@ def convert_html_to_pdf_zen(source_file: Path, output_file: Path):
             "Zen Browser not found. Install it from https://github.com/zen-browser/desktop"
         )
 
-    cmd = [
-        zen_path,
-        '--headless',
-        f'--print-to-pdf={output_file}',
-        '--print-to-pdf-no-header',
-        f'file://{source_file}',
-    ]
+    # Ensure the output directory exists
+    output_file.parent.mkdir(parents=True, exist_ok=True)
 
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+    # Use a temporary output path with a simple filename to avoid issues with
+    # spaces, special characters, or iCloud Drive paths. Zen Browser (Firefox)
+    # can silently fail to write when the destination path contains unusual
+    # characters or resides on a non-standard filesystem.
+    temp_dir = tempfile.mkdtemp()
+    try:
+        temp_output = Path(temp_dir) / "output.pdf"
 
-    if result.returncode != 0:
-        raise RuntimeError(
-            f"Zen Browser PDF conversion failed (exit {result.returncode}): {result.stderr}"
-        )
+        cmd = [
+            zen_path,
+            '--headless',
+            f'--print-to-pdf={temp_output}',
+            '--print-to-pdf-no-header',
+            f'file://{source_file}',
+        ]
 
-    if not output_file.exists():
-        raise RuntimeError(
-            f"Zen Browser did not produce the expected output file: {output_file}"
-        )
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"Zen Browser PDF conversion failed (exit {result.returncode}): {result.stderr}"
+            )
+
+        if not temp_output.exists():
+            raise RuntimeError(
+                f"Zen Browser did not produce a PDF (expected temp output at {temp_output}); "
+                f"target file was: {output_file}"
+            )
+
+        shutil.move(str(temp_output), str(output_file))
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
 
 
 def convert_html_to_pdf():
