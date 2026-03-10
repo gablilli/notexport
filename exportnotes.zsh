@@ -24,6 +24,7 @@ export NOTES_EXPORT_SET_FILE_DATES="${NOTES_EXPORT_SET_FILE_DATES:=true}"  # Set
 export NOTES_EXPORT_FOLDERS="${NOTES_EXPORT_FOLDERS:=}"  # Comma-separated list of folder names to export (empty = all folders)
 export NOTES_EXPORT_CLEANUP="${NOTES_EXPORT_CLEANUP:=false}"  # Cleanup source directories after PDF conversion
 export NOTES_EXPORT_CONTINUOUS_PDF="${NOTES_EXPORT_CONTINUOUS_PDF:=false}"  # Export PDFs as continuous page (for handwritten notes)
+export NOTES_EXPORT_PDF_ENGINE="${NOTES_EXPORT_PDF_ENGINE:=weasyprint}"  # PDF engine: 'weasyprint' (default) or 'zen' (Zen Browser)
 
 # Force image extraction if either Markdown, PDF, or Word conversion is enabled
 if [[ "${NOTES_EXPORT_CONVERT_TO_MARKDOWN}" == "true" || "${NOTES_EXPORT_CONVERT_TO_PDF}" == "true" || "${NOTES_EXPORT_CONVERT_TO_WORD}" == "true" ]]; then
@@ -161,6 +162,14 @@ while [[ $# -gt 0 ]]; do
             export NOTES_EXPORT_CONTINUOUS_PDF="true"
             shift
             ;;
+        --pdf-engine|-E)
+            if [[ -z "$2" ]]; then
+                echo "Error: --pdf-engine requires an argument (weasyprint or zen)."
+                exit 1
+            fi
+            export NOTES_EXPORT_PDF_ENGINE="$2"
+            shift 2
+            ;;
         --uv-venv|-c)
             if [[ -z "$2" ]]; then
                 echo "Error: --conda-env requires an argument."
@@ -214,6 +223,7 @@ while [[ $# -gt 0 ]]; do
             echo "                                     Spaces after commas are automatically trimmed."
             echo "  -C, --cleanup                      Cleanup source directories after PDF conversion"
             echo "  -P, --continuous-pdf               Export PDFs as continuous page (for handwritten notes)"
+            echo "  -E, --pdf-engine ENGINE            PDF engine: 'weasyprint' (default) or 'zen' (Zen Browser)"
             echo "  -c, --conda-env NAME               Conda environment name"
             echo "  -e, --remove-conda-env BOOL        Remove conda environment after export"
             echo "  -U, --update-all                   Force full update (disable incremental updates)"
