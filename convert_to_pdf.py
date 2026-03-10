@@ -1,6 +1,7 @@
 import os
 import re
 import sys
+import subprocess
 import tempfile
 import shutil
 from pathlib import Path
@@ -240,6 +241,73 @@ def add_pdf_css_to_html(source_file: Path, continuous: bool = True, title: str =
             shutil.rmtree(temp_dir, ignore_errors=True)
         raise
 
+def _find_zen_browser():
+    """Find the Zen Browser executable on macOS.
+
+    Returns:
+        Path to Zen Browser executable, or None if not found.
+    """
+    zen_paths = [
+        '/Applications/Zen Browser.app/Contents/MacOS/zen',
+        '/Applications/Zen.app/Contents/MacOS/zen',
+        os.path.expanduser('~/Applications/Zen Browser.app/Contents/MacOS/zen'),
+        os.path.expanduser('~/Applications/Zen.app/Contents/MacOS/zen'),
+    ]
+
+    for path in zen_paths:
+        if os.path.exists(path):
+            return path
+
+    # Fall back to PATH lookup
+    for name in ['zen', 'zen-browser']:
+        found = shutil.which(name)
+        if found:
+            return found
+
+    return None
+
+
+def convert_html_to_pdf_zen(source_file: Path, output_file: Path):
+    """Convert an HTML file to PDF using Zen Browser headless mode.
+
+    Zen Browser (Firefox-based) correctly handles page breaks and produces
+    well-paginated PDFs without text being cut across page boundaries.
+
+    Args:
+        source_file: Path to the (possibly CSS-enhanced) HTML file.
+        output_file: Desired path for the resulting PDF file.
+
+    Raises:
+        FileNotFoundError: If Zen Browser is not installed.
+        RuntimeError: If the conversion process fails.
+    """
+    zen_path = _find_zen_browser()
+    if not zen_path:
+        raise FileNotFoundError(
+            "Zen Browser not found. Install it from https://github.com/zen-browser/desktop"
+        )
+
+    cmd = [
+        zen_path,
+        '--headless',
+        f'--print-to-pdf={output_file}',
+        '--print-to-pdf-no-header',
+        f'file://{source_file}',
+    ]
+
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"Zen Browser PDF conversion failed (exit {result.returncode}): {result.stderr}"
+        )
+
+    if not output_file.exists():
+        raise RuntimeError(
+            f"Zen Browser did not produce the expected output file: {output_file}"
+        )
+
+
 def convert_html_to_pdf():
     """Convert HTML files to PDF using JSON tracking"""
     tracker = get_tracker()
@@ -260,12 +328,24 @@ def convert_html_to_pdf():
     
     # Check settings
     continuous_pdf = os.getenv('NOTES_EXPORT_CONTINUOUS_PDF', 'false').lower() == 'true'
-    
+    pdf_engine = os.getenv('NOTES_EXPORT_PDF_ENGINE', 'weasyprint').lower()
+
     print(f"Continuous PDF (no page breaks): {continuous_pdf}")
-    
-    if not _WEASYPRINT_AVAILABLE:
-        print("Error: weasyprint is not installed. Run: pip install 'weasyprint>=68.0'", file=sys.stderr)
-        sys.exit(1)
+    print(f"PDF engine: {pdf_engine}")
+
+    if pdf_engine == 'zen':
+        zen_path = _find_zen_browser()
+        if not zen_path:
+            print(
+                "Error: Zen Browser not found. Install it from https://github.com/zen-browser/desktop",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        print(f"Using Zen Browser at: {zen_path}")
+    else:
+        if not _WEASYPRINT_AVAILABLE:
+            print("Error: weasyprint is not installed. Run: pip install 'weasyprint>=68.0'", file=sys.stderr)
+            sys.exit(1)
     
     temp_files_to_cleanup = []
     
@@ -281,8 +361,11 @@ def convert_html_to_pdf():
             source_file = add_pdf_css_to_html(note['source_file'], continuous=continuous_pdf, title=note['filename'])
             temp_files_to_cleanup.append(source_file.parent)  # Track temp directory for cleanup
             
-            # Convert HTML to PDF using weasyprint (native, no external browser needed)
-            _weasyprint.HTML(filename=str(source_file)).write_pdf(str(output_file))
+            # Convert HTML to PDF using the selected engine
+            if pdf_engine == 'zen':
+                convert_html_to_pdf_zen(source_file, Path(output_file))
+            else:
+                _weasyprint.HTML(filename=str(source_file)).write_pdf(str(output_file))
             
             print(f"Created: {output_file}")
             

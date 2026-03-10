@@ -1,5 +1,6 @@
 import os
 import tempfile
+import pytest
 from pathlib import Path
 from datetime import datetime
 import sys
@@ -7,7 +8,7 @@ import sys
 # Add parent directory to path to import modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from convert_to_pdf import parse_apple_date, add_pdf_css_to_html
+from convert_to_pdf import parse_apple_date, add_pdf_css_to_html, _find_zen_browser, convert_html_to_pdf_zen
 
 
 def test_parse_apple_date():
@@ -142,6 +143,28 @@ def test_add_pdf_css_preserves_attachments():
         assert (result_attachments / "test.png").exists()
 
 
+def test_find_zen_browser_returns_none_when_absent(monkeypatch):
+    """Test that _find_zen_browser returns None when Zen Browser is not installed."""
+    # Patch os.path.exists to always return False and shutil.which to always return None
+    monkeypatch.setattr('os.path.exists', lambda p: False)
+    monkeypatch.setattr('shutil.which', lambda name: None)
+    result = _find_zen_browser()
+    assert result is None
+
+
+def test_convert_html_to_pdf_zen_raises_when_not_found(monkeypatch, tmp_path):
+    """Test that convert_html_to_pdf_zen raises FileNotFoundError when Zen Browser is missing."""
+    # Make _find_zen_browser return None
+    monkeypatch.setattr('convert_to_pdf._find_zen_browser', lambda: None)
+
+    source_file = tmp_path / "test.html"
+    source_file.write_text("<html><body>Hello</body></html>")
+    output_file = tmp_path / "test.pdf"
+
+    with pytest.raises(FileNotFoundError, match="Zen Browser not found"):
+        convert_html_to_pdf_zen(source_file, output_file)
+
+
 if __name__ == '__main__':
     # Run tests manually
     test_parse_apple_date()
@@ -161,5 +184,9 @@ if __name__ == '__main__':
     
     test_add_pdf_css_preserves_attachments()
     print("✓ test_add_pdf_css_preserves_attachments passed")
+    
+    # Note: test_find_zen_browser_returns_none_when_absent and
+    # test_convert_html_to_pdf_zen_raises_when_not_found require pytest's
+    # monkeypatch fixture and must be run via pytest, not the manual runner.
     
     print("\nAll tests passed!")

@@ -66,6 +66,9 @@ notes will be exported to `~/Downloads/AppleNotesExport` by default.
 # continuous pdf for handwritten notes (no page breaks)
 ./exportnotes.zsh --convert-pdf true --continuous-pdf
 
+# export pdf using zen browser (better page breaks)
+./exportnotes.zsh --convert-pdf true --pdf-engine zen
+
 # export to custom directory
 ./exportnotes.zsh --root-dir ~/Documents/MyNotes
 
@@ -83,6 +86,7 @@ notes will be exported to `~/Downloads/AppleNotesExport` by default.
 | `--convert-markdown` | `-m` | convert to markdown |
 | `--convert-word` | `-w` | convert to word (docx) |
 | `--continuous-pdf` | `-P` | export pdf as continuous page (for handwritten notes) |
+| `--pdf-engine` | `-E` | pdf engine: `weasyprint` (default) or `zen` (Zen Browser) |
 | `--cleanup` | `-C` | cleanup source directories after pdf conversion |
 | `--all` | `-a` | enable all format conversions |
 | `--update-all` | `-U` | force full update (disable incremental) |
@@ -113,7 +117,8 @@ AppleNotesExport/
 
 | format | dependency |
 |--------|------------|
-| pdf | [google chrome](https://www.google.com/chrome/) |
+| pdf (weasyprint engine) | installed via `pip install -r requirements.txt` |
+| pdf (zen engine) | [zen browser](https://github.com/zen-browser/desktop) |
 | word | `brew install pandoc` |
 
 ## 📅 scheduled exports
