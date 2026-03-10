@@ -300,13 +300,22 @@ def convert_html_to_pdf_zen(source_file: Path, output_file: Path):
     temp_dir = tempfile.mkdtemp()
     try:
         temp_output = Path(temp_dir) / "output.pdf"
+        # Use a temporary profile directory so that Zen Browser starts a
+        # completely independent instance.  Without --new-instance and a fresh
+        # --profile, a headless invocation that finds an existing Zen window
+        # simply forwards the print job to that window and exits with code 0
+        # without writing any file.
+        temp_profile = Path(temp_dir) / "profile"
+        temp_profile.mkdir()
 
         cmd = [
             zen_path,
             '--headless',
+            '--new-instance',
+            '--profile', str(temp_profile),
             f'--print-to-pdf={temp_output}',
             '--print-to-pdf-no-header',
-            f'file://{source_file}',
+            source_file.as_uri(),
         ]
 
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)

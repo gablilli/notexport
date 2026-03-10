@@ -223,6 +223,62 @@ def test_convert_html_to_pdf_zen_uses_temp_path_and_moves(monkeypatch, tmp_path)
     assert str(output_dir) not in str(temp_pdf_path)
 
 
+def test_convert_html_to_pdf_zen_uses_new_instance_and_profile(monkeypatch, tmp_path):
+    """Test that convert_html_to_pdf_zen passes --new-instance and a temp --profile.
+
+    This verifies the fix for Zen Browser silently succeeding (exit 0) without
+    writing a PDF when another Zen window is already open.  Without
+    --new-instance the headless invocation forwards the print job to the
+    existing window and exits immediately without producing a file.
+    """
+    fake_zen = str(tmp_path / "zen")
+
+    def fake_find_zen():
+        return fake_zen
+
+    captured_cmds = []
+
+    def fake_run(cmd, **kwargs):
+        captured_cmds.append(cmd)
+        for arg in cmd:
+            if arg.startswith('--print-to-pdf='):
+                temp_out = Path(arg[len('--print-to-pdf='):])
+                temp_out.parent.mkdir(parents=True, exist_ok=True)
+                temp_out.write_bytes(b"%PDF-1.4 fake content")
+                break
+
+        class FakeResult:
+            returncode = 0
+            stderr = ""
+
+        return FakeResult()
+
+    monkeypatch.setattr('convert_to_pdf._find_zen_browser', fake_find_zen)
+    monkeypatch.setattr('convert_to_pdf.subprocess.run', fake_run)
+
+    source_file = tmp_path / "source.html"
+    source_file.write_text("<html><body>Hello</body></html>")
+    output_file = tmp_path / "output.pdf"
+
+    convert_html_to_pdf_zen(source_file, output_file)
+
+    assert len(captured_cmds) == 1
+    cmd = captured_cmds[0]
+
+    # --new-instance must be present so Zen Browser doesn't reuse a running window
+    assert '--new-instance' in cmd, "--new-instance flag is required"
+
+    # --profile must be present and point to a temp directory (not the output dir)
+    assert '--profile' in cmd, "--profile flag is required"
+    profile_idx = cmd.index('--profile')
+    profile_path = Path(cmd[profile_idx + 1])
+    assert profile_path != tmp_path, "--profile should point to a fresh temp directory"
+
+    # The source file URL must use the file:// scheme (via Path.as_uri())
+    file_url_arg = cmd[-1]
+    assert file_url_arg.startswith('file://'), "Source file must be passed as a file:// URL"
+
+
 def test_convert_html_to_pdf_zen_creates_output_dir(monkeypatch, tmp_path):
     """Test that convert_html_to_pdf_zen creates missing output directories."""
 
