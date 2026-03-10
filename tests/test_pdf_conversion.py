@@ -165,6 +165,99 @@ def test_convert_html_to_pdf_zen_raises_when_not_found(monkeypatch, tmp_path):
         convert_html_to_pdf_zen(source_file, output_file)
 
 
+def test_convert_html_to_pdf_zen_uses_temp_path_and_moves(monkeypatch, tmp_path):
+    """Test that convert_html_to_pdf_zen writes to a temp path then moves to output_file.
+
+    This verifies the fix for Zen Browser silently failing to write when the
+    output path contains spaces, special characters, or is on iCloud Drive.
+    """
+    import subprocess as _subprocess
+
+    fake_zen = str(tmp_path / "zen")
+
+    def fake_find_zen():
+        return fake_zen
+
+    captured_cmds = []
+
+    def fake_run(cmd, **kwargs):
+        captured_cmds.append(cmd)
+        # Simulate Zen Browser writing to the temp output path it was given
+        for arg in cmd:
+            if arg.startswith('--print-to-pdf='):
+                temp_out = Path(arg[len('--print-to-pdf='):])
+                temp_out.parent.mkdir(parents=True, exist_ok=True)
+                temp_out.write_bytes(b"%PDF-1.4 fake content")
+                break
+
+        class FakeResult:
+            returncode = 0
+            stderr = ""
+
+        return FakeResult()
+
+    monkeypatch.setattr('convert_to_pdf._find_zen_browser', fake_find_zen)
+    monkeypatch.setattr('convert_to_pdf.subprocess.run', fake_run)
+
+    source_file = tmp_path / "source.html"
+    source_file.write_text("<html><body>Hello</body></html>")
+
+    # Output path with spaces to simulate the problematic case
+    output_dir = tmp_path / "pdf output" / "sub folder"
+    output_dir.mkdir(parents=True)
+    output_file = output_dir / "my note with spaces.pdf"
+
+    convert_html_to_pdf_zen(source_file, output_file)
+
+    # The output file must exist at the final destination
+    assert output_file.exists(), "Output PDF was not moved to final destination"
+    assert output_file.read_bytes() == b"%PDF-1.4 fake content"
+
+    # Zen Browser must have been called with a temp path, not the final path
+    assert len(captured_cmds) == 1
+    cmd = captured_cmds[0]
+    pdf_arg = next(a for a in cmd if a.startswith('--print-to-pdf='))
+    temp_pdf_path = Path(pdf_arg[len('--print-to-pdf='):])
+    assert temp_pdf_path != output_file, "Zen Browser should have been called with a temp path"
+    # The temp path should be inside a temp directory (not the final output dir)
+    assert str(output_dir) not in str(temp_pdf_path)
+
+
+def test_convert_html_to_pdf_zen_creates_output_dir(monkeypatch, tmp_path):
+    """Test that convert_html_to_pdf_zen creates missing output directories."""
+
+    def fake_find_zen():
+        return str(tmp_path / "zen")
+
+    def fake_run(cmd, **kwargs):
+        for arg in cmd:
+            if arg.startswith('--print-to-pdf='):
+                temp_out = Path(arg[len('--print-to-pdf='):])
+                temp_out.parent.mkdir(parents=True, exist_ok=True)
+                temp_out.write_bytes(b"%PDF-1.4 fake content")
+                break
+
+        class FakeResult:
+            returncode = 0
+            stderr = ""
+
+        return FakeResult()
+
+    monkeypatch.setattr('convert_to_pdf._find_zen_browser', fake_find_zen)
+    monkeypatch.setattr('convert_to_pdf.subprocess.run', fake_run)
+
+    source_file = tmp_path / "source.html"
+    source_file.write_text("<html><body>Hello</body></html>")
+
+    # Output directory does not exist yet
+    output_file = tmp_path / "nonexistent" / "deep" / "output.pdf"
+    assert not output_file.parent.exists()
+
+    convert_html_to_pdf_zen(source_file, output_file)
+
+    assert output_file.exists()
+
+
 if __name__ == '__main__':
     # Run tests manually
     test_parse_apple_date()
