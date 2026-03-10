@@ -8,11 +8,14 @@ from pathlib import Path
 from notes_export_utils import get_tracker
 from datetime import datetime
 
-try:
-    import weasyprint as _weasyprint
-    _WEASYPRINT_AVAILABLE = True
-except ImportError:
-    _WEASYPRINT_AVAILABLE = False
+_weasyprint = None
+_WEASYPRINT_AVAILABLE = False
+if os.getenv('NOTES_EXPORT_PDF_ENGINE', 'weasyprint').lower() != 'zen':
+    try:
+        import weasyprint as _weasyprint
+        _WEASYPRINT_AVAILABLE = True
+    except (ImportError, OSError, ModuleNotFoundError):
+        _WEASYPRINT_AVAILABLE = False
 
 # Italian month name to number mapping
 _ITALIAN_MONTHS = {
