@@ -251,9 +251,6 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Initialize Conda for Zsh
-eval "$(conda shell.zsh hook)"
-
 # Function to check if a conda environment exists
 conda_env_exists() {
     conda info --envs | grep -q "^$1 "
@@ -286,9 +283,10 @@ remove_conda_env() {
 
 # Handle conda environment
 if [[ -n "${NOTES_EXPORT_CONDA_ENV}" ]]; then
+    # Initialize Conda for Zsh only when a conda environment is requested
+    eval "$(conda shell.zsh hook)"
     if conda_env_exists "${NOTES_EXPORT_CONDA_ENV}"; then
         echo "Activating existing conda environment: ${NOTES_EXPORT_CONDA_ENV}"
-        eval "$(conda shell.zsh hook)" # Ensure conda is reinitialized
         conda activate "${NOTES_EXPORT_CONDA_ENV}"
     else
         echo "Creating and activating new conda environment: ${NOTES_EXPORT_CONDA_ENV}"
