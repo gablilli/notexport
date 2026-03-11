@@ -10,11 +10,18 @@ from datetime import datetime
 
 _weasyprint = None
 _WEASYPRINT_AVAILABLE = False
+# Tuple of (reason, exception) where reason is 'not_installed', 'system_libs', or 'unknown'
+_WEASYPRINT_IMPORT_ERROR = None
 try:
     import weasyprint as _weasyprint
     _WEASYPRINT_AVAILABLE = True
-except (ImportError, OSError, ModuleNotFoundError):
-    _WEASYPRINT_AVAILABLE = False
+except (ImportError, ModuleNotFoundError):
+    _WEASYPRINT_IMPORT_ERROR = ("not_installed", None)
+except OSError as e:
+    # weasyprint is installed but required system libraries (e.g. Pango, Cairo) are missing
+    _WEASYPRINT_IMPORT_ERROR = ("system_libs", e)
+except Exception as e:
+    _WEASYPRINT_IMPORT_ERROR = ("unknown", e)
 
 # Italian month name to number mapping
 _ITALIAN_MONTHS = {
@@ -269,7 +276,26 @@ def convert_html_to_pdf():
     print(f"Processing {len(notes_to_process)} notes for PDF conversion...")
     
     if not _WEASYPRINT_AVAILABLE:
-        print("Error: weasyprint is not installed. Run: pip install 'weasyprint>=68.0'", file=sys.stderr)
+        reason = _WEASYPRINT_IMPORT_ERROR[0] if _WEASYPRINT_IMPORT_ERROR else "not_installed"
+        exc = _WEASYPRINT_IMPORT_ERROR[1] if _WEASYPRINT_IMPORT_ERROR else None
+        if reason == "system_libs":
+            print(
+                "Error: weasyprint is installed but cannot load required system libraries.\n"
+                "Install the missing system dependencies and try again.\n"
+                "See: https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#installation\n"
+                "     https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#troubleshooting",
+                file=sys.stderr,
+            )
+        elif reason == "unknown" and exc is not None:
+            print(
+                f"Error: weasyprint failed to load ({type(exc).__name__}: {exc}).\n"
+                "Run: pip install 'weasyprint>=68.0'\n"
+                "If already installed, check system dependencies:\n"
+                "See: https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#installation",
+                file=sys.stderr,
+            )
+        else:
+            print("Error: weasyprint is not installed. Run: pip install 'weasyprint>=68.0'", file=sys.stderr)
         sys.exit(1)
 
     # Check settings

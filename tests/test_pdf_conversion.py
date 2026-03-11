@@ -9,6 +9,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from convert_to_pdf import parse_apple_date, add_pdf_css_to_html
+import unittest.mock as mock
 
 
 def test_parse_apple_date():
@@ -158,3 +159,83 @@ def test_add_pdf_css_preserves_attachments():
         result_attachments = result_file.parent / "attachments"
         assert result_attachments.exists()
         assert (result_attachments / "test.png").exists()
+
+
+# ---------------------------------------------------------------------------
+# Tests for weasyprint availability detection and error messages
+# ---------------------------------------------------------------------------
+
+import convert_to_pdf as _pdf_module
+
+
+def _run_convert_with_mocked_weasyprint(available, import_error, tmp_path, monkeypatch, capsys):
+    """Helper: patch module globals and run convert_html_to_pdf with a fake tracker."""
+    import convert_to_pdf
+
+    # Build a minimal tracker mock
+    tracker = mock.MagicMock()
+    tracker.root_directory = str(tmp_path)
+    # Return one fake note so the "no notes" early-return is not triggered
+    tracker.get_notes_to_process.return_value = [
+        {
+            'note_id': '1',
+            'notebook': 'TestBook',
+            'filename': 'TestNote',
+            'source_file': tmp_path / 'TestNote.html',
+            'json_file': tmp_path / 'TestBook.json',
+            'note_info': {},
+        }
+    ]
+
+    monkeypatch.setattr(convert_to_pdf, '_WEASYPRINT_AVAILABLE', available)
+    monkeypatch.setattr(convert_to_pdf, '_WEASYPRINT_IMPORT_ERROR', import_error)
+
+    with mock.patch('convert_to_pdf.get_tracker', return_value=tracker):
+        with pytest.raises(SystemExit) as exc_info:
+            convert_to_pdf.convert_html_to_pdf()
+
+    assert exc_info.value.code == 1
+    captured = capsys.readouterr()
+    return captured.err
+
+
+def test_weasyprint_not_installed_error_message(tmp_path, monkeypatch, capsys):
+    """When weasyprint is not installed, the error message says 'not installed'."""
+    err = _run_convert_with_mocked_weasyprint(
+        available=False,
+        import_error=("not_installed", None),
+        tmp_path=tmp_path,
+        monkeypatch=monkeypatch,
+        capsys=capsys,
+    )
+    assert "not installed" in err
+    assert "pip install" in err
+    assert "system libraries" not in err
+
+
+def test_weasyprint_system_libs_error_message(tmp_path, monkeypatch, capsys):
+    """When weasyprint is installed but system libraries are missing, error says so."""
+    err = _run_convert_with_mocked_weasyprint(
+        available=False,
+        import_error=("system_libs", OSError("libpango-1.0.so.0: cannot open shared object file")),
+        tmp_path=tmp_path,
+        monkeypatch=monkeypatch,
+        capsys=capsys,
+    )
+    assert "system libraries" in err
+    assert "doc.courtbouillon.org" in err
+    # Should NOT say "not installed" (weasyprint itself IS installed)
+    assert "not installed" not in err
+
+
+def test_weasyprint_unknown_error_message(tmp_path, monkeypatch, capsys):
+    """When weasyprint fails with an unknown error, details are shown."""
+    err = _run_convert_with_mocked_weasyprint(
+        available=False,
+        import_error=("unknown", AttributeError("some internal error")),
+        tmp_path=tmp_path,
+        monkeypatch=monkeypatch,
+        capsys=capsys,
+    )
+    assert "failed to load" in err
+    assert "AttributeError" in err
