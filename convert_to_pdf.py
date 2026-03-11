@@ -10,12 +10,11 @@ from datetime import datetime
 
 _weasyprint = None
 _WEASYPRINT_AVAILABLE = False
-if os.getenv('NOTES_EXPORT_PDF_ENGINE', 'weasyprint').lower() != 'zen':
-    try:
-        import weasyprint as _weasyprint
-        _WEASYPRINT_AVAILABLE = True
-    except (ImportError, OSError, ModuleNotFoundError):
-        _WEASYPRINT_AVAILABLE = False
+try:
+    import weasyprint as _weasyprint
+    _WEASYPRINT_AVAILABLE = True
+except (ImportError, OSError, ModuleNotFoundError):
+    _WEASYPRINT_AVAILABLE = False
 
 # Italian month name to number mapping
 _ITALIAN_MONTHS = {
@@ -121,7 +120,7 @@ def add_pdf_css_to_html(source_file: Path, continuous: bool = True, title: str =
     with open(source_file, 'r', encoding='utf-8') as f:
         html_content = f.read()
     
-    # Base CSS for all PDFs - fixes text cutoff issues
+    # Base CSS for all PDFs - fixes text cutoff issues and ensures images fit in a page
     base_css = """
         @page {
             size: auto;
@@ -138,7 +137,12 @@ def add_pdf_css_to_html(source_file: Path, continuous: bool = True, title: str =
             }
             img {
                 max-width: 100% !important;
+                max-height: 277mm !important;
                 height: auto !important;
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+                page-break-after: always !important;
+                break-after: always !important;
             }
             pre, code {
                 white-space: pre-wrap !important;
@@ -158,7 +162,12 @@ def add_pdf_css_to_html(source_file: Path, continuous: bool = True, title: str =
         }
         img {
             max-width: 100%;
+            max-height: 277mm;
             height: auto;
+            page-break-inside: avoid;
+            break-inside: avoid;
+            page-break-after: always;
+            break-after: always;
         }
         pre, code {
             white-space: pre-wrap;
@@ -168,13 +177,9 @@ def add_pdf_css_to_html(source_file: Path, continuous: bool = True, title: str =
         }
     """
     
-    # Additional CSS for continuous mode (prevents page breaks)
+    # Additional CSS for continuous mode (prevents page breaks for all elements)
     continuous_css = """
             * {
-                page-break-inside: avoid !important;
-                break-inside: avoid !important;
-            }
-            img {
                 page-break-inside: avoid !important;
                 break-inside: avoid !important;
             }
@@ -244,140 +249,6 @@ def add_pdf_css_to_html(source_file: Path, continuous: bool = True, title: str =
             shutil.rmtree(temp_dir, ignore_errors=True)
         raise
 
-def _write_zen_profile_prefs(profile_dir: Path) -> None:
-    """Write user.js to a Zen Browser profile to skip first-run behaviours.
-
-    When Zen Browser (Firefox-based) is launched with a brand-new ``--profile``
-    directory it performs first-run initialisation tasks – welcome pages, update
-    checks, telemetry opt-in dialogs – that can cause the headless process to
-    hang indefinitely and never complete the ``--print-to-pdf`` job.
-
-    Writing these preferences into ``user.js`` before the process starts
-    suppresses those blocking tasks and allows the print job to finish quickly.
-    """
-    prefs = [
-        'user_pref("app.update.enabled", false);',
-        'user_pref("app.update.auto", false);',
-        'user_pref("browser.shell.checkDefaultBrowser", false);',
-        'user_pref("browser.startup.homepage", "about:blank");',
-        'user_pref("startup.homepage_welcome_url", "about:blank");',
-        'user_pref("startup.homepage_welcome_url.additional", "");',
-        'user_pref("startup.homepage_override_url", "about:blank");',
-        'user_pref("browser.rights.3.shown", true);',
-        'user_pref("trailhead.firstrun.didSeeAboutWelcome", true);',
-        'user_pref("browser.startup.upgradeDialog.enabled", false);',
-    ]
-    (profile_dir / 'user.js').write_text('\n'.join(prefs) + '\n', encoding='utf-8')
-
-
-def _find_zen_browser():
-    """Find the Zen Browser executable on macOS.
-
-    Returns:
-        Path to Zen Browser executable, or None if not found.
-    """
-    zen_paths = [
-        '/Applications/Zen Browser.app/Contents/MacOS/zen',
-        '/Applications/Zen.app/Contents/MacOS/zen',
-        os.path.expanduser('~/Applications/Zen Browser.app/Contents/MacOS/zen'),
-        os.path.expanduser('~/Applications/Zen.app/Contents/MacOS/zen'),
-    ]
-
-    for path in zen_paths:
-        if os.path.exists(path):
-            return path
-
-    # Fall back to PATH lookup
-    for name in ['zen', 'zen-browser']:
-        found = shutil.which(name)
-        if found:
-            return found
-
-    return None
-
-
-def convert_html_to_pdf_zen(source_file: Path, output_file: Path):
-    """Convert an HTML file to PDF using Zen Browser headless mode.
-
-    Zen Browser (Firefox-based) correctly handles page breaks and produces
-    well-paginated PDFs without text being cut across page boundaries.
-
-    Args:
-        source_file: Path to the (possibly CSS-enhanced) HTML file.
-        output_file: Desired path for the resulting PDF file.
-
-    Raises:
-        FileNotFoundError: If Zen Browser is not installed.
-        RuntimeError: If the conversion process fails.
-    """
-    zen_path = _find_zen_browser()
-    if not zen_path:
-        raise FileNotFoundError(
-            "Zen Browser not found. Install it from https://github.com/zen-browser/desktop"
-        )
-
-    # Ensure the output directory exists
-    output_file.parent.mkdir(parents=True, exist_ok=True)
-
-    # Allow callers to override the timeout via an environment variable.
-    # The default of 120 s is kept for backward compatibility.
-    timeout = int(os.getenv('NOTES_EXPORT_ZEN_TIMEOUT', '120'))
-
-    # Use a temporary output path with a simple filename to avoid issues with
-    # spaces, special characters, or iCloud Drive paths. Zen Browser (Firefox)
-    # can silently fail to write when the destination path contains unusual
-    # characters or resides on a non-standard filesystem.
-    temp_dir = tempfile.mkdtemp()
-    try:
-        temp_output = Path(temp_dir) / "output.pdf"
-        # Use a temporary profile directory so that Zen Browser starts a
-        # completely independent instance.  Without --new-instance and a fresh
-        # --profile, a headless invocation that finds an existing Zen window
-        # simply forwards the print job to that window and exits with code 0
-        # without writing any file.
-        temp_profile = Path(temp_dir) / "profile"
-        temp_profile.mkdir()
-
-        # Pre-populate the profile with preferences that suppress first-run
-        # initialisation tasks (welcome pages, update checks, etc.).  Without
-        # these, Zen Browser can hang indefinitely when launched with a brand-
-        # new profile, causing every conversion to time out.
-        _write_zen_profile_prefs(temp_profile)
-
-        cmd = [
-            zen_path,
-            '--headless',
-            '--new-instance',
-            '--profile', str(temp_profile),
-            f'--print-to-pdf={temp_output}',
-            '--print-to-pdf-no-header',
-            source_file.as_uri(),
-        ]
-
-        try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
-        except subprocess.TimeoutExpired:
-            raise RuntimeError(
-                f"Zen Browser PDF conversion timed out after {timeout} seconds. "
-                "Set the NOTES_EXPORT_ZEN_TIMEOUT environment variable to a "
-                "larger value if your notes require more time to render."
-            )
-
-        if result.returncode != 0:
-            raise RuntimeError(
-                f"Zen Browser PDF conversion failed (exit {result.returncode}): {result.stderr}"
-            )
-
-        if not temp_output.exists():
-            raise RuntimeError(
-                f"Zen Browser did not produce a PDF (expected temp output at {temp_output}); "
-                f"target file was: {output_file}"
-            )
-
-        shutil.move(str(temp_output), str(output_file))
-    finally:
-        shutil.rmtree(temp_dir, ignore_errors=True)
-
 
 def convert_html_to_pdf():
     """Convert HTML files to PDF using JSON tracking"""
@@ -397,26 +268,14 @@ def convert_html_to_pdf():
     
     print(f"Processing {len(notes_to_process)} notes for PDF conversion...")
     
+    if not _WEASYPRINT_AVAILABLE:
+        print("Error: weasyprint is not installed. Run: pip install 'weasyprint>=68.0'", file=sys.stderr)
+        sys.exit(1)
+
     # Check settings
     continuous_pdf = os.getenv('NOTES_EXPORT_CONTINUOUS_PDF', 'false').lower() == 'true'
-    pdf_engine = os.getenv('NOTES_EXPORT_PDF_ENGINE', 'weasyprint').lower()
 
     print(f"Continuous PDF (no page breaks): {continuous_pdf}")
-    print(f"PDF engine: {pdf_engine}")
-
-    if pdf_engine == 'zen':
-        zen_path = _find_zen_browser()
-        if not zen_path:
-            print(
-                "Error: Zen Browser not found. Install it from https://github.com/zen-browser/desktop",
-                file=sys.stderr,
-            )
-            sys.exit(1)
-        print(f"Using Zen Browser at: {zen_path}")
-    else:
-        if not _WEASYPRINT_AVAILABLE:
-            print("Error: weasyprint is not installed. Run: pip install 'weasyprint>=68.0'", file=sys.stderr)
-            sys.exit(1)
     
     temp_files_to_cleanup = []
     
@@ -427,16 +286,12 @@ def convert_html_to_pdf():
             # Get output path
             output_file = tracker.get_output_path('pdf', note['notebook'], note['filename'], '.pdf')
             
-            # Always use CSS-enhanced HTML (fixes text cutoff in all modes)
+            # Always use CSS-enhanced HTML (fixes text cutoff and image sizing)
             # Note: note['filename'] is the sanitized note title used for the filename
             source_file = add_pdf_css_to_html(note['source_file'], continuous=continuous_pdf, title=note['filename'])
             temp_files_to_cleanup.append(source_file.parent)  # Track temp directory for cleanup
             
-            # Convert HTML to PDF using the selected engine
-            if pdf_engine == 'zen':
-                convert_html_to_pdf_zen(source_file, Path(output_file))
-            else:
-                _weasyprint.HTML(filename=str(source_file)).write_pdf(str(output_file))
+            _weasyprint.HTML(filename=str(source_file)).write_pdf(str(output_file))
             
             print(f"Created: {output_file}")
             
