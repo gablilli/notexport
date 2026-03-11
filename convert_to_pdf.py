@@ -244,6 +244,32 @@ def add_pdf_css_to_html(source_file: Path, continuous: bool = True, title: str =
             shutil.rmtree(temp_dir, ignore_errors=True)
         raise
 
+def _write_zen_profile_prefs(profile_dir: Path) -> None:
+    """Write user.js to a Zen Browser profile to skip first-run behaviours.
+
+    When Zen Browser (Firefox-based) is launched with a brand-new ``--profile``
+    directory it performs first-run initialisation tasks – welcome pages, update
+    checks, telemetry opt-in dialogs – that can cause the headless process to
+    hang indefinitely and never complete the ``--print-to-pdf`` job.
+
+    Writing these preferences into ``user.js`` before the process starts
+    suppresses those blocking tasks and allows the print job to finish quickly.
+    """
+    prefs = [
+        'user_pref("app.update.enabled", false);',
+        'user_pref("app.update.auto", false);',
+        'user_pref("browser.shell.checkDefaultBrowser", false);',
+        'user_pref("browser.startup.homepage", "about:blank");',
+        'user_pref("startup.homepage_welcome_url", "about:blank");',
+        'user_pref("startup.homepage_welcome_url.additional", "");',
+        'user_pref("startup.homepage_override_url", "about:blank");',
+        'user_pref("browser.rights.3.shown", true);',
+        'user_pref("trailhead.firstrun.didSeeAboutWelcome", true);',
+        'user_pref("browser.startup.upgradeDialog.enabled", false);',
+    ]
+    (profile_dir / 'user.js').write_text('\n'.join(prefs) + '\n', encoding='utf-8')
+
+
 def _find_zen_browser():
     """Find the Zen Browser executable on macOS.
 
@@ -293,6 +319,10 @@ def convert_html_to_pdf_zen(source_file: Path, output_file: Path):
     # Ensure the output directory exists
     output_file.parent.mkdir(parents=True, exist_ok=True)
 
+    # Allow callers to override the timeout via an environment variable.
+    # The default of 120 s is kept for backward compatibility.
+    timeout = int(os.getenv('NOTES_EXPORT_ZEN_TIMEOUT', '120'))
+
     # Use a temporary output path with a simple filename to avoid issues with
     # spaces, special characters, or iCloud Drive paths. Zen Browser (Firefox)
     # can silently fail to write when the destination path contains unusual
@@ -308,6 +338,12 @@ def convert_html_to_pdf_zen(source_file: Path, output_file: Path):
         temp_profile = Path(temp_dir) / "profile"
         temp_profile.mkdir()
 
+        # Pre-populate the profile with preferences that suppress first-run
+        # initialisation tasks (welcome pages, update checks, etc.).  Without
+        # these, Zen Browser can hang indefinitely when launched with a brand-
+        # new profile, causing every conversion to time out.
+        _write_zen_profile_prefs(temp_profile)
+
         cmd = [
             zen_path,
             '--headless',
@@ -318,7 +354,14 @@ def convert_html_to_pdf_zen(source_file: Path, output_file: Path):
             source_file.as_uri(),
         ]
 
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            raise RuntimeError(
+                f"Zen Browser PDF conversion timed out after {timeout} seconds. "
+                "Set the NOTES_EXPORT_ZEN_TIMEOUT environment variable to a "
+                "larger value if your notes require more time to render."
+            )
 
         if result.returncode != 0:
             raise RuntimeError(
