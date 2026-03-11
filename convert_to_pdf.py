@@ -141,6 +141,8 @@ def add_pdf_css_to_html(source_file: Path, continuous: bool = True, title: str =
                 height: auto !important;
                 page-break-inside: avoid !important;
                 break-inside: avoid !important;
+                page-break-after: always !important;
+                break-after: always !important;
             }
             pre, code {
                 white-space: pre-wrap !important;
@@ -164,6 +166,8 @@ def add_pdf_css_to_html(source_file: Path, continuous: bool = True, title: str =
             height: auto;
             page-break-inside: avoid;
             break-inside: avoid;
+            page-break-after: always;
+            break-after: always;
         }
         pre, code {
             white-space: pre-wrap;

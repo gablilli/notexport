@@ -132,6 +132,9 @@ def test_add_pdf_css_images_fit_in_page():
         # Images must not be cut across pages
         assert "page-break-inside: avoid" in content
         assert "break-inside: avoid" in content
+        # Each image must force a page break after it
+        assert "page-break-after: always" in content
+        assert "break-after: always" in content
 
 
 def test_add_pdf_css_preserves_attachments():
